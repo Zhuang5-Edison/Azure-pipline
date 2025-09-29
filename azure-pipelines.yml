@@ -19,3 +19,15 @@ steps:
     python PlayWright.py
   displayName: 'Run Playwright Test'
 
+- script: |
+    pytest test_playwright_script.py --html=report.html --self-contained-html
+  displayName: 'Run Pytest and Generate HTML Report'
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: '$(System.DefaultWorkingDirectory)/report.html'
+    artifact: 'pytest-report'
+    publishLocation: 'pipeline'
+  displayName: 'Publish Pytest HTML Report'
+
+
