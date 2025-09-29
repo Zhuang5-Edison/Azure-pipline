@@ -1,0 +1,21 @@
+trigger:
+- main  # 或你的分支名
+
+pool:
+  vmImage: 'windows-latest'  # 也可用 ubuntu-latest
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.8'  # 或你需要的版本
+
+- script: |
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    python -m playwright install
+  displayName: 'Install dependencies and Playwright browsers'
+
+- script: |
+    python PlayWright.py
+  displayName: 'Run Playwright Test'
+
