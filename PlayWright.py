@@ -36,5 +36,5 @@ async def main() -> None:
         await run(playwright)
 
 
-asyncio.run(main())
+# asyncio.run(main())
 
