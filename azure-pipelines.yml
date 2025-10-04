@@ -18,10 +18,6 @@ steps:
       wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-$(JMETER_VERSION).tgz
       tar -xf apache-jmeter-$(JMETER_VERSION).tgz
     displayName: 'Install Apache JMeter'
-    
-  - script: |
-      python jtl_junit_converter.py results/results.jtl results/TEST-jmeter.xml
-    displayName: 'Convert JTL (CSV) → JUnit XML'
 
   # 2) 运行 JMeter（非 GUI），产出 .jtl 和 HTML 报告
   #    注意：通过 -Jjmeter.save.saveservice.output_format=xml 强制 JTL 为 XML，便于后面转换
@@ -46,6 +42,10 @@ steps:
         $(RESULTS_DIR)/results.jtl \
         $(RESULTS_DIR)/TEST-jmeter.xml
     displayName: 'Convert JTL (XML) → JUnit XML'
+
+  - script: |
+      python jtl_junit_converter.py results/results.jtl results/TEST-jmeter.xml
+    displayName: 'Convert JTL (CSV) → JUnit XML'
 
   # 4) 发布测试结果（Tests 标签可见）
   - task: PublishTestResults@2
