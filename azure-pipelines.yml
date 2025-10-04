@@ -1,33 +1,67 @@
+# azure-pipelines.yml
 trigger:
-- main  # 或你的分支名
+- main
 
 pool:
-  vmImage: 'windows-latest'  # 也可用 ubuntu-latest
+  vmImage: 'ubuntu-latest'
+
+variables:
+  JMETER_VERSION: '5.6.3'                # 如需固定版本可改这里
+  TESTPLAN: 'mms.uat.exyte.net.jmx'
+  RESULTS_DIR: 'results'
+  REPORT_DIR: 'report'
 
 steps:
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.8'  # 或你需要的版本
+  # 1) 安装 JMeter（从 Apache 存档下载并解压）
+  - script: |
+      set -eux
+      wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-$(JMETER_VERSION).tgz
+      tar -xf apache-jmeter-$(JMETER_VERSION).tgz
+    displayName: 'Install Apache JMeter'
 
-- script: |
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    python -m playwright install
-  displayName: 'Install dependencies and Playwright browsers'
+  # 2) 运行 JMeter（非 GUI），产出 .jtl 和 HTML 报告
+  #    注意：通过 -Jjmeter.save.saveservice.output_format=xml 强制 JTL 为 XML，便于后面转换
+  - script: |
+      set -eux
+      mkdir -p $(RESULTS_DIR) $(REPORT_DIR)
+      apache-jmeter-$(JMETER_VERSION)/bin/jmeter \
+        -n \
+        -t $(TESTPLAN) \
+        -l $(RESULTS_DIR)/results.jtl \
+        -j $(RESULTS_DIR)/jmeter.log \
+        -Jjmeter.save.saveservice.output_format=xml \
+        -Jjmeter.reportgenerator.overall_granularity=1000 \
+        -e -o $(REPORT_DIR)
+    displayName: 'Run JMeter (non-GUI) and generate HTML report'
+    # 说明：使用 -e -o 让 JMeter 在执行后生成 HTML 报告目录（report/）以便发布和查看
+    # 该做法与社区示例一致。[1](https://github.com/testsmith-io/example-jmeter-azure-devops-integration/blob/master/azure-pipelines.yml)[4](https://www.testsmith.io/en/blog/integrate-jmeter-performance-tests-with-azure-devops-controlled-by-an-azure-pipeline)
+  # 3) 将 JTL 转换为 JUnit XML，方便 PublishTestResults 在 Tests 页签展示
+  - script: |
+      set -eux
+      python jtl_junit_converter.py \
+        $(RESULTS_DIR)/results.jtl \
+        $(RESULTS_DIR)/TEST-jmeter.xml
+    displayName: 'Convert JTL (XML) → JUnit XML'
 
-- script: |
-    python PlayWright.py
-  displayName: 'Run Playwright Test'
+  # 4) 发布测试结果（Tests 标签可见）
+  - task: PublishTestResults@2
+    displayName: 'Publish JUnit test results'
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: 'results/TEST-jmeter.xml'
+      failTaskOnFailedTests: true
+    # 官方任务文档参考。[2](https://learn.microsoft.com/zh-cn/azure/devops/pipelines/tasks/reference/publish-test-results-v2?view=azure-pipelines)
 
-#- script: |
-#    pytest test_playwright_script.py --html=report.html --self-contained-html
-#  displayName: 'Run Pytest and Generate HTML Report'
-#
-#- task: PublishPipelineArtifact@1
-#  inputs:
-#    targetPath: '$(System.DefaultWorkingDirectory)/report.html'
-#    artifact: 'pytest-report'
-#    publishLocation: 'pipeline'
-#  displayName: 'Publish Pytest HTML Report'
+  # 5) 发布原始结果和 HTML 报告为流水线制品（可下载）
+  - publish: $(System.DefaultWorkingDirectory)/results
+    artifact: jmeter-results
+    displayName: 'Publish JMeter raw results (.jtl/.log)'
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish JMeter HTML report'
+    inputs:
+      targetPath: '$(REPORT_DIR)'
+      artifact: 'jmeter-report'
+    # Pipeline Artifacts 文档参考。[3](https://learn.microsoft.com/en-us/azure/devops/pipelines/artifacts/pipeline-artifacts?view=azure-devops)
+
 
 
